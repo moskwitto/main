@@ -1,3 +1,5 @@
+// config.h
+
 #ifndef CONFIG_H
 #define CONFIG_H
 
@@ -5,15 +7,14 @@
 #include <nRF24L01.h>
 #include <RF24.h>
 
-// Set this to true for the master, false for the slave
-#define IS_MASTER true
-// #define IS_MASTER false
+// Set this to true for the master, commented for the slave
+//#define IS_MASTER true
 
 // Pin Definitions
 #if defined IS_MASTER
   #define IS_MASTER true
-  #define CSN_PIN 7
-  #define CE_PIN 9
+  #define CSN_PIN 6
+  #define CE_PIN 7
   #define IRQ_PIN 2
   #define ROLE "Master"
 #else
@@ -34,6 +35,12 @@ struct Message {
     unsigned long slaveCaptureTime;
 };
 
-volatile bool interruptFlag = false;
+enum class Stage {
+      TCP,
+      DATA,
+      RESET,
+      MSG
+};
 
+Stage stage=Stage::TCP;
 #endif // CONFIG_H

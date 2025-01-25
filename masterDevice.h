@@ -1,3 +1,4 @@
+#include "Print.h"
 #ifndef MASTERDEVICE_H
 #define MASTERDEVICE_H
 
@@ -11,17 +12,47 @@ private:
 public:
     MasterDevice(NRF24Radio& radio) : radio(radio) {}
 
-    void handleProtocol() {
-        Message dataToSend;
-        snprintf(dataToSend.messageType, sizeof(dataToSend.messageType), "DATA");
-        dataToSend.count = messageCount++;
-        dataToSend.masterCaptureTime = micros();
+    void masterLoop(){
+      Message message;
+      if(radio.interruptFlag){
+        radio.interruptFlag=false;
+        bool tx_ok, tx_fail, rx_ready;
+        radio.radio.whatHappened(tx_ok, tx_fail, rx_ready);
 
-        radio.radio.stopListening();
-        radio.radio.write(&dataToSend, sizeof(dataToSend));
-        radio.radio.startListening();
+        if (tx_ok) {
+          radio.txMicros=micros();
+          Serial.println("Master: Sent! ");
+          radio.startListening();//listen for ack
+          radio.timeOut();//start timeout counter
+        }
+        if (tx_fail) {
+          Serial.println("Master: Failed! ");
+          stage=Stage::RESET;
+          radio.handleProtocol(message);//try and send Again
+        }
+        if (rx_ready) { //got ack, read it then continue with protocol
+          radio.rxMicros=micros();
+          Serial.println("Master: received! ");
+          message=radio.receiveMessage();
+          radio.handleProtocol(message);
+          //get capture time if slave replies with TCP phase
+          //this is master->slave-> master 
+          if(strcmp(message.messageType,"TCP")){
+            message.masterCaptureTime=radio.captureTime;
+          }
+          else{
+            Serial.println("waiting....");
+          }
 
-        Serial.println("Master sent a message.");
+        }
+    }
+
+    if(radio.timeOutFlag){
+      //ack not received
+      stage=Stage::RESET;
+      radio.handleProtocol(message);
+    }
+
     }
 };
 
