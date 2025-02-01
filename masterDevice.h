@@ -18,6 +18,7 @@ public:
         radio.interruptFlag=false;
         bool tx_ok, tx_fail, rx_ready;
         radio.radio.whatHappened(tx_ok, tx_fail, rx_ready);
+        Serial.println("Interrupt");
 
         if (tx_ok) {
           radio.txMicros=micros();
@@ -49,6 +50,7 @@ public:
 
     if(radio.timeOutFlag){
       //ack not received
+      radio.timeOutFlag=false;
       stage=Stage::RESET;
       radio.handleProtocol(message);
     }

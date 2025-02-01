@@ -37,6 +37,7 @@ public:
         radio.setDataRate(RF24_1MBPS);         // Set data rate
         radio.setPALevel(RF24_PA_MIN);         // Set PA level
         radio.setRetries(1, 0);                // Set auto retry: 250 µs delay, 0 retries
+        radio.setAutoAck(false);
         radio.setPayloadSize(sizeof(Message)); // Set payload size
         radio.openWritingPipe(address);        // Open writing pipe
         radio.openReadingPipe(1, addressAck);  // Open reading pipe
@@ -91,6 +92,7 @@ public:
       Message dataToSend;
       radio.startFastWrite(&dataToSend, sizeof(dataToSend), 0);
       delay(150);
+      Serial.println("Sending...");
       radio.startListening();
     }
 
@@ -125,18 +127,21 @@ public:
           instance->sendMessage(message);
           Serial.println("TCP");
           stage = Stage::DATA;
+          instance->timeOut();
           break;
         case Stage::DATA:
           sprintf(message.messageType,sizeof(message.messageType),"DATA");
           instance->sendMessage(message);
           Serial.println("DATA");
           stage = Stage::TCP;
+          instance->timeOut();
           break;
         case Stage::RESET:
           sprintf(message.messageType,sizeof(message.messageType),"RESET");
           instance->sendMessage(message);
           Serial.println("RESET");
           stage = Stage::TCP;
+          instance->timeOut();
           break;
         case Stage::MSG:
           sprintf(message.messageType,sizeof(message.messageType),"MSG");
