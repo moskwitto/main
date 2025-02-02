@@ -39,8 +39,8 @@ public:
         radio.setRetries(1, 0);                // Set auto retry: 250 µs delay, 0 retries
         radio.setAutoAck(false);
         radio.setPayloadSize(sizeof(Message)); // Set payload size
-        radio.openWritingPipe(address);        // Open writing pipe
-        radio.openReadingPipe(1, addressAck);  // Open reading pipe
+        radio.openWritingPipe(addressAck);        // Open writing pipe
+        radio.openReadingPipe(0, address);  // Open reading pipe
         radio.startListening();                // Start listening
         radio.maskIRQ(0, 1, 0);                // Mask TX_DS and MAX_RT interrupts, enable RX_DR
 
@@ -79,6 +79,9 @@ public:
         Serial.println(F("}"));
         return dataReceived;
       }
+      else{
+        Serial.print("..");
+      }
 
       //not available; return NULL
       sprintf(dataReceived.messageType,sizeof(dataReceived.messageType),"NULL");
@@ -89,11 +92,14 @@ public:
     // messagetype is handled by handleprotocol()
     void sendMessage(Message message){
       radio.stopListening();
-      Message dataToSend;
+      Message dataToSend=message;
+      dataToSend.count=messageCount;
       radio.startFastWrite(&dataToSend, sizeof(dataToSend), 0);
       delay(150);
       Serial.println("Sending...");
-      radio.startListening();
+      Serial.println(dataToSend.count);
+      
+      //radio.startListening();
     }
 
     static void interruptRoutine() {
@@ -123,14 +129,14 @@ public:
     void handleProtocol(Message message) {
       switch (stage) {
         case Stage::TCP:
-          sprintf(message.messageType,sizeof(message.messageType),"TCP");
+          strcpy(message.messageType,"TCP");
           instance->sendMessage(message);
           Serial.println("TCP");
           stage = Stage::DATA;
           instance->timeOut();
           break;
         case Stage::DATA:
-          sprintf(message.messageType,sizeof(message.messageType),"DATA");
+          strcpy(message.messageType,"DATA");
           instance->sendMessage(message);
           Serial.println("DATA");
           stage = Stage::TCP;
@@ -138,13 +144,14 @@ public:
           break;
         case Stage::RESET:
           sprintf(message.messageType,sizeof(message.messageType),"RESET");
+          strcpy(message.messageType,"RESET");
           instance->sendMessage(message);
           Serial.println("RESET");
           stage = Stage::TCP;
           instance->timeOut();
           break;
         case Stage::MSG:
-          sprintf(message.messageType,sizeof(message.messageType),"MSG");
+           strcpy(message.messageType,"MSG");
           instance->sendMessage(message);
           Serial.println("MSG");
           stage = Stage::TCP;
@@ -158,7 +165,7 @@ public:
     void timeOut() {
       int timeoutCounter = 0;
       while (!radio.available() && timeoutCounter < 10) {
-          delay(25);
+          delay(100);
           timeoutCounter++;
           if (timeoutCounter == 10) {
               instance->timeOutFlag = true;

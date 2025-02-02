@@ -7,23 +7,23 @@
 class MasterDevice {
 private:
     NRF24Radio& radio;
-    unsigned int messageCount = 0;
 
 public:
     MasterDevice(NRF24Radio& radio) : radio(radio) {}
 
     void masterLoop(){
       Message message;
+
       if(radio.interruptFlag){
         radio.interruptFlag=false;
         bool tx_ok, tx_fail, rx_ready;
         radio.radio.whatHappened(tx_ok, tx_fail, rx_ready);
-        Serial.println("Interrupt");
 
         if (tx_ok) {
           radio.txMicros=micros();
           Serial.println("Master: Sent! ");
           radio.startListening();//listen for ack
+          radio.instance->messageCount++;
           radio.timeOut();//start timeout counter
         }
         if (tx_fail) {
@@ -45,7 +45,7 @@ public:
             Serial.println("waiting....");
           }
 
-        }
+      }
     }
 
     if(radio.timeOutFlag){
@@ -55,6 +55,11 @@ public:
       radio.handleProtocol(message);
     }
 
+    }
+
+    void receiveMessage(){
+      //radio.startListening();
+      radio.receiveMessage();
     }
 };
 

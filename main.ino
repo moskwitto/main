@@ -24,6 +24,7 @@ void setup() {
 
     //Init for protocol
     Message message;
+    radio.startListening();
     radio.handleProtocol(message);
 }
 
