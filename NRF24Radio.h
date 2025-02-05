@@ -17,6 +17,8 @@ public:
     volatile unsigned int endCaptureTime = 0;
     volatile unsigned int overflowCount = 0;
     volatile unsigned int captureTime = 0;
+    volatile unsigned int captureTimeOVF = 0;
+    unsigned long totalCapturetime;
 
     //timeout flag
     volatile bool timeOutFlag;
@@ -36,7 +38,7 @@ public:
         radio.setChannel(75);                  // Set channel
         radio.setDataRate(RF24_1MBPS);         // Set data rate
         radio.setPALevel(RF24_PA_MIN);         // Set PA level
-        radio.setRetries(1, 0);                // Set auto retry: 250 µs delay, 0 retries
+        //radio.setRetries(1, 0);                // Set auto retry: 250 µs delay, 0 retries
         radio.setAutoAck(false);
         radio.setPayloadSize(sizeof(Message)); // Set payload size
         radio.openWritingPipe(addressAck);        // Open writing pipe
@@ -68,15 +70,17 @@ public:
       Message dataReceived;
       if(radio.available()){
         radio.read(&dataReceived, sizeof(dataReceived));
-        Serial.print(F("{Message Type: "));
-        Serial.print(dataReceived.messageType);
-        Serial.print(F(", Count: "));
-        Serial.print(dataReceived.count);
-        Serial.print(F(", Send Time: "));
-        Serial.print(dataReceived.masterCaptureTime);
-        Serial.print(F(", Slave Capture Time: "));
-        Serial.print(dataReceived.slaveCaptureTime);
-        Serial.println(F("}"));
+
+        // Serial.print(F("{Message Type: "));
+        // Serial.print(dataReceived.messageType);
+        // Serial.print(F(", Count: "));
+        // Serial.print(dataReceived.count);
+        // Serial.print(F(", master Capture Time: "));
+        // Serial.print(dataReceived.masterCaptureTime);
+        // Serial.print(F(", Slave Capture Time: "));
+        // Serial.print(dataReceived.slaveCaptureTime);
+        // Serial.println(F("}"));
+        
         return dataReceived;
       }
       else{
@@ -95,11 +99,6 @@ public:
       Message dataToSend=message;
       dataToSend.count=messageCount;
       radio.startFastWrite(&dataToSend, sizeof(dataToSend), 0);
-      delay(150);
-      Serial.println("Sending...");
-      Serial.println(dataToSend.count);
-      
-      //radio.startListening();
     }
 
     static void interruptRoutine() {
@@ -129,31 +128,31 @@ public:
     void handleProtocol(Message message) {
       switch (stage) {
         case Stage::TCP:
-          strcpy(message.messageType,"TCP");
+          snprintf(message.messageType, sizeof(message.messageType), "TCP");
           instance->sendMessage(message);
-          Serial.println("TCP");
+          // Serial.println("TCP");
           stage = Stage::DATA;
-          instance->timeOut();
+          // instance->timeOut();
           break;
         case Stage::DATA:
-          strcpy(message.messageType,"DATA");
+          snprintf(message.messageType, sizeof(message.messageType), "DATA");
           instance->sendMessage(message);
-          Serial.println("DATA");
+          // Serial.println("DATA");
           stage = Stage::TCP;
-          instance->timeOut();
+          // instance->timeOut();
           break;
         case Stage::RESET:
-          sprintf(message.messageType,sizeof(message.messageType),"RESET");
+          //sprintf(message.messageType,sizeof(message.messageType),"RESET");
           strcpy(message.messageType,"RESET");
           instance->sendMessage(message);
-          Serial.println("RESET");
+          // Serial.println("RESET");
           stage = Stage::TCP;
-          instance->timeOut();
+          // instance->timeOut();
           break;
         case Stage::MSG:
-           strcpy(message.messageType,"MSG");
+          snprintf(message.messageType, sizeof(message.messageType), "MSG");
           instance->sendMessage(message);
-          Serial.println("MSG");
+          // Serial.println("MSG");
           stage = Stage::TCP;
           break;
         default:
@@ -164,15 +163,15 @@ public:
     // Handle Timeout
     void timeOut() {
       int timeoutCounter = 0;
+      radio.startListening();
       while (!radio.available() && timeoutCounter < 10) {
-          delay(100);
+          delay(150);
           timeoutCounter++;
           if (timeoutCounter == 10) {
               instance->timeOutFlag = true;
               Serial.println(F("Time out"));
               break;
       }
-
     }
 
 }
@@ -189,15 +188,13 @@ public:
                 instance->endCaptureTime = ICR1; // Capture end time
 
                 // Calculate total elapsed time
-                if (instance->endCaptureTime < instance->startCaptureTime) {
-                    instance->captureTime = instance->endCaptureTime - instance->startCaptureTime;
-                } else {
-                    instance->captureTime = instance->endCaptureTime - instance->startCaptureTime;
-                }
+                instance->captureTime = instance->endCaptureTime - instance->startCaptureTime;
+                instance->captureTimeOVF = instance->overflowCount - startOverflowCount ;
+                
 
                 instance->firstCaptureDone = false; // Reset for the next measurement
-                Serial.print("Capture Time: ");
-                Serial.println(instance->captureTime);
+                // Serial.print("Capture Time: ");
+                // Serial.println(instance->captureTime);
             }
         }
     }

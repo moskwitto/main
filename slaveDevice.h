@@ -6,12 +6,13 @@
 class SlaveDevice {
 private:
     NRF24Radio& radio;
+    long int tcpCaptureTime;
 
 public:
     SlaveDevice(NRF24Radio& radio) : radio(radio) {}
+    Message message;
     
     void slaveLoop(){
-      Message message;
       if(radio.interruptFlag){
         radio.interruptFlag=false;
         bool tx_ok, tx_fail, rx_ready;
@@ -19,8 +20,12 @@ public:
 
         if (tx_ok) {
           radio.txMicros=micros();
-          Serial.println("Slave: Sent! ");
-          radio.startListening();//listen for ack
+          // Serial.println("Slave: Sent! ");
+          radio.instance->messageCount++;
+          radio.instance->timeOut();
+
+          radio.startListening();
+
         }
         if (tx_fail) {
           Serial.println("Slave: Failed! ");
@@ -29,29 +34,45 @@ public:
         }
         if (rx_ready) { //got ack, read it then continue with protocol
           radio.rxMicros=micros();
-          Serial.println("Slave: received! ");
+          // Serial.println("Slave: received! ");
           message=radio.receiveMessage();
-          radio.handleProtocol(message);
           //get capture time if slave replies with TCP phase
           //this is master->slave-> master 
-          if(strcmp(message.messageType,"DATA")){
-            message.slaveCaptureTime=radio.captureTime;
-          }
-          else{
-            Serial.println("waiting....");
+          if(strcmp(message.messageType,"TCP")==0){
+            radio.instance->totalCapturetime = (((unsigned long) radio.instance->captureTimeOVF) << 16 ) + radio.instance->captureTime;
+            message.slaveCaptureTime=radio.instance->totalCapturetime;
+            Serial.print("Capture Time: ");
+            Serial.println(radio.instance->captureTime);
+            Serial.print("Capture TimeOVF: ");
+            Serial.println(radio.instance->captureTimeOVF);
+            radio.instance->totalCapturetime = (((unsigned long) radio.instance->captureTimeOVF) << 16 ) + radio.instance->captureTime;
+            Serial.print("Total capture Time: ");
+            Serial.println(radio.instance->totalCapturetime);
           }
 
+          if(strcmp(message.messageType,"RESET")==0){
+            message.slaveCaptureTime=0;
+            message.masterCaptureTime=0;
+          }
+          
+          if(strcmp(message.messageType,"DATA")==0){
+            Serial.print("Time: ");
+            Serial.println(message.slaveCaptureTime-message.masterCaptureTime);
+            message.slaveCaptureTime=0;
+          }
+          
+          radio.handleProtocol(message);
+          
         }
     }
 
-    if(radio.timeOutFlag){
+    if(radio.instance->timeOutFlag){
       //ack not received
       stage=Stage::RESET;
+      radio.instance->timeOutFlag=false;
       radio.handleProtocol(message);
     }
-
     }
-
 };
 
 #endif // SLAVEDEVICE_H

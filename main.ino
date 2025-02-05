@@ -3,8 +3,8 @@
 #include "slaveDevice.h"
 
 // Addresses for communication
-const byte address[5] = "MYGPS";
-const byte addressAck[5] = "YOGPS";
+const byte addressAck[5] = "MYGPS";
+const byte address[5] = "YOGPS";
 
 // Radio and device objects
 NRF24Radio radio(CE_PIN, CSN_PIN);
@@ -21,17 +21,21 @@ void setup() {
     Serial.print("Initialized as: ");
     Serial.println(ROLE);
     radio.printDetails();
+    if(strcmp(ROLE,"Slave")==0){
+      radio.startListening();
+
+    }
+      
 
     //Init for protocol
-    Message message;
-    radio.startListening();
-    radio.handleProtocol(message);
+    // Message message;
+    // radio.startListening();
+     
 }
 
 void loop() {
 #if IS_MASTER
     master.masterLoop();
-    delay(1000); 
 #else
     slave.slaveLoop();
 #endif

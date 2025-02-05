@@ -7,24 +7,35 @@
 class MasterDevice {
 private:
     NRF24Radio& radio;
+    long int tcpCaptureTime;
 
 public:
     MasterDevice(NRF24Radio& radio) : radio(radio) {}
+    Message message;
 
     void masterLoop(){
-      Message message;
-
       if(radio.interruptFlag){
         radio.interruptFlag=false;
         bool tx_ok, tx_fail, rx_ready;
         radio.radio.whatHappened(tx_ok, tx_fail, rx_ready);
 
         if (tx_ok) {
+          radio.startListening();
           radio.txMicros=micros();
           Serial.println("Master: Sent! ");
-          radio.startListening();//listen for ack
-          radio.instance->messageCount++;
+          // radio.instance->messageCount++;
           radio.timeOut();//start timeout counter
+
+          //store capture time for TCP stage(to be sent in data stage)
+          if (strcmp(message.messageType,"TCP")==0){
+            Serial.print("Capture Time: ");
+            Serial.println(radio.instance->captureTime);
+            Serial.print("Capture TimeOVF: ");
+            Serial.println(radio.instance->captureTimeOVF);
+            radio.instance->totalCapturetime = (((unsigned long) radio.instance->captureTimeOVF) << 16 ) + radio.instance->captureTime;
+            Serial.print("Total capture Time: ");
+            Serial.println(radio.instance->totalCapturetime);
+          }
         }
         if (tx_fail) {
           Serial.println("Master: Failed! ");
@@ -35,26 +46,33 @@ public:
           radio.rxMicros=micros();
           Serial.println("Master: received! ");
           message=radio.receiveMessage();
-          radio.handleProtocol(message);
+          radio.instance->messageCount=message.count;
           //get capture time if slave replies with TCP phase
           //this is master->slave-> master 
-          if(strcmp(message.messageType,"TCP")){
-            message.masterCaptureTime=radio.captureTime;
+          if(strcmp(message.messageType,"TCP")==0){
+            message.masterCaptureTime=0;
+            
+            //Reply TCP pkt with TCP pkt
+            stage=Stage::TCP;
           }
-          else{
-            Serial.println("waiting....");
+          else if(strcmp(message.messageType,"DATA")==0){
+            message.masterCaptureTime=radio.instance->totalCapturetime;
+            Serial.print(" Time: ");
+            Serial.println(message.slaveCaptureTime-message.masterCaptureTime);
           }
+          radio.handleProtocol(message);
 
       }
     }
 
     if(radio.timeOutFlag){
       //ack not received
-      radio.timeOutFlag=false;
+      radio.instance->timeOutFlag=false;
       stage=Stage::RESET;
       radio.handleProtocol(message);
     }
 
+    
     }
 
     void receiveMessage(){
