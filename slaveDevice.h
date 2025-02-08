@@ -23,24 +23,30 @@ public:
           // Serial.println("Slave: Sent! ");
           radio.instance->messageCount++;
           radio.instance->timeOut();
-
+          if(stage==Stage::DATA){
+            //prepare to store capture time after sending TCP package
+            radio.instance->secondCaptureDone=false;
+          
+          }
           radio.startListening();
-
         }
+
+
         if (tx_fail) {
           Serial.println("Slave: Failed! ");
           stage=Stage::RESET;
-          radio.handleProtocol(message);//try and send Again
+          radio.handleProtocol(message); //send Again
+          return;
         }
+
         if (rx_ready) { //got ack, read it then continue with protocol
           radio.rxMicros=micros();
           // Serial.println("Slave: received! ");
           message=radio.receiveMessage();
           //get capture time if slave replies with TCP phase
           //this is master->slave-> master 
-          if(strcmp(message.messageType,"TCP")==0){
-            radio.instance->totalCapturetime = (((unsigned long) radio.instance->captureTimeOVF) << 16 ) + radio.instance->captureTime;
-            message.slaveCaptureTime=radio.instance->totalCapturetime;
+          if(strcmp(message.messageType,"DATA")==0){
+            message.slaveCaptureTime=radio.instance->captureTime;
             Serial.print("Capture Time: ");
             Serial.println(radio.instance->captureTime);
             Serial.print("Capture TimeOVF: ");
@@ -48,19 +54,20 @@ public:
             radio.instance->totalCapturetime = (((unsigned long) radio.instance->captureTimeOVF) << 16 ) + radio.instance->captureTime;
             Serial.print("Total capture Time: ");
             Serial.println(radio.instance->totalCapturetime);
+            message.slaveCaptureTime=radio.captureTime;
+            Serial.print("Time: ");
+            Serial.println(message.slaveCaptureTime-message.masterCaptureTime);
+            radio.handleProtocol(message);
+            return;
+
           }
 
           if(strcmp(message.messageType,"RESET")==0){
-            message.slaveCaptureTime=0;
-            message.masterCaptureTime=0;
+            radio.handleProtocol(message);
+            return;
           }
           
-          if(strcmp(message.messageType,"DATA")==0){
-            Serial.print("Time: ");
-            Serial.println(message.slaveCaptureTime-message.masterCaptureTime);
-            message.slaveCaptureTime=0;
-          }
-          
+          //TCP stage proceeds
           radio.handleProtocol(message);
           
         }

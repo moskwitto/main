@@ -13,6 +13,7 @@ public:
 
     // Variables for input capture
     volatile bool firstCaptureDone = false;   // Tracks capture state
+    volatile bool secondCaptureDone =false;
     volatile unsigned int startCaptureTime = 0;
     volatile unsigned int endCaptureTime = 0;
     volatile unsigned int overflowCount = 0;
@@ -34,8 +35,8 @@ public:
         : radio(cePin, csnPin) {}
 
     void initialize(const byte* address, const byte* addressAck) {
-        radio.begin();
-        radio.setChannel(75);                  // Set channel
+        while(!radio.begin()) //wait till radio is initialised
+        radio.setChannel(78);                  // Set channel
         radio.setDataRate(RF24_1MBPS);         // Set data rate
         radio.setPALevel(RF24_PA_MIN);         // Set PA level
         //radio.setRetries(1, 0);                // Set auto retry: 250 µs delay, 0 retries
@@ -71,15 +72,15 @@ public:
       if(radio.available()){
         radio.read(&dataReceived, sizeof(dataReceived));
 
-        // Serial.print(F("{Message Type: "));
-        // Serial.print(dataReceived.messageType);
-        // Serial.print(F(", Count: "));
-        // Serial.print(dataReceived.count);
-        // Serial.print(F(", master Capture Time: "));
-        // Serial.print(dataReceived.masterCaptureTime);
-        // Serial.print(F(", Slave Capture Time: "));
-        // Serial.print(dataReceived.slaveCaptureTime);
-        // Serial.println(F("}"));
+        Serial.print(F("{Message Type: "));
+        Serial.print(dataReceived.messageType);
+        Serial.print(F(", Count: "));
+        Serial.print(dataReceived.count);
+        Serial.print(F(", master Capture Time: "));
+        Serial.print(dataReceived.masterCaptureTime);
+        Serial.print(F(", Slave Capture Time: "));
+        Serial.print(dataReceived.slaveCaptureTime);
+        Serial.println(F("}"));
         
         return dataReceived;
       }
@@ -97,8 +98,20 @@ public:
     void sendMessage(Message message){
       radio.stopListening();
       Message dataToSend=message;
+      dataToSend.slaveCaptureTime=message.slaveCaptureTime;
+      dataToSend.masterCaptureTime=message.masterCaptureTime;
       dataToSend.count=messageCount;
       radio.startFastWrite(&dataToSend, sizeof(dataToSend), 0);
+
+      // Serial.print(F("{Message Type: "));
+      // Serial.print(dataToSend.messageType);
+      // Serial.print(F(", Count: "));
+      // Serial.print(dataToSend.count);
+      // Serial.print(F(", master Capture Time: "));
+      // Serial.print(dataToSend.masterCaptureTime);
+      // Serial.print(F(", Slave Capture Time: "));
+      // Serial.print(dataToSend.slaveCaptureTime);
+      // Serial.println(F("}"));
     }
 
     static void interruptRoutine() {
@@ -129,17 +142,18 @@ public:
       switch (stage) {
         case Stage::TCP:
           snprintf(message.messageType, sizeof(message.messageType), "TCP");
+          //In TCP packets, capture times should be 0
+          message.masterCaptureTime=0;
+          message.slaveCaptureTime=0;
           instance->sendMessage(message);
-          // Serial.println("TCP");
-          stage = Stage::DATA;
-          // instance->timeOut();
+          stage = Stage::DATA; //set next stage to send data pkt
           break;
         case Stage::DATA:
           snprintf(message.messageType, sizeof(message.messageType), "DATA");
           instance->sendMessage(message);
-          // Serial.println("DATA");
+          //After sending DATA pkt, reset capture flag to prepare for fresh capture time
+          instance->firstCaptureDone=false;
           stage = Stage::TCP;
-          // instance->timeOut();
           break;
         case Stage::RESET:
           //sprintf(message.messageType,sizeof(message.messageType),"RESET");
@@ -181,20 +195,28 @@ public:
             static unsigned int startOverflowCount = 0;
 
             if (!instance->firstCaptureDone) {
+              Serial.print("*&*&* at ");
+              Serial.print(stage==Stage::TCP?"tcp ":"data");
+              Serial.println("Stage");
                 instance->startCaptureTime = ICR1;         // Capture start time
                 startOverflowCount = instance->overflowCount; // Record overflow count
                 instance->firstCaptureDone = true;
-            } else {
+                return;
+            } 
+            if (!instance->secondCaptureDone) {
                 instance->endCaptureTime = ICR1; // Capture end time
+                instance->secondCaptureDone=true;
 
                 // Calculate total elapsed time
                 instance->captureTime = instance->endCaptureTime - instance->startCaptureTime;
                 instance->captureTimeOVF = instance->overflowCount - startOverflowCount ;
                 
 
-                instance->firstCaptureDone = false; // Reset for the next measurement
-                // Serial.print("Capture Time: ");
-                // Serial.println(instance->captureTime);
+                // instance->firstCaptureDone = false; // Reset for the next measurement
+                Serial.print("Capture Time: ");
+                Serial.print(stage==Stage::TCP?"*&*& tcp ":"*&*& data ");
+                Serial.println(instance->captureTime);
+                return;
             }
         }
     }

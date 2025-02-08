@@ -22,12 +22,33 @@ public:
         if (tx_ok) {
           radio.startListening();
           radio.txMicros=micros();
-          Serial.println("Master: Sent! ");
+          // Serial.println("Master: Sent! ");
           // radio.instance->messageCount++;
           radio.timeOut();//start timeout counter
+        }
 
-          //store capture time for TCP stage(to be sent in data stage)
-          if (strcmp(message.messageType,"TCP")==0){
+        if (tx_fail) {
+          Serial.println("Master: Failed! ");
+          stage=Stage::RESET;
+          radio.handleProtocol(message);//try and send Again
+        }
+
+        if (rx_ready) { //got ack, read it then continue with protocol
+          radio.rxMicros=micros();
+          // Serial.println("Master: received! ");
+          message=radio.receiveMessage();
+          radio.instance->messageCount=message.count;
+          //get capture time if slave replies with TCP phase
+          //this is master->slave-> master 
+          if(strcmp(message.messageType,"TCP")==0){
+            //Reply TCP pkt with TCP pkt
+            stage=Stage::TCP;
+            //prepare to get capture time
+            radio.instance->secondCaptureDone=false;
+            radio.handleProtocol(message);
+            return;
+          }
+          else if(strcmp(message.messageType,"DATA")==0){
             Serial.print("Capture Time: ");
             Serial.println(radio.instance->captureTime);
             Serial.print("Capture TimeOVF: ");
@@ -35,32 +56,20 @@ public:
             radio.instance->totalCapturetime = (((unsigned long) radio.instance->captureTimeOVF) << 16 ) + radio.instance->captureTime;
             Serial.print("Total capture Time: ");
             Serial.println(radio.instance->totalCapturetime);
-          }
-        }
-        if (tx_fail) {
-          Serial.println("Master: Failed! ");
-          stage=Stage::RESET;
-          radio.handleProtocol(message);//try and send Again
-        }
-        if (rx_ready) { //got ack, read it then continue with protocol
-          radio.rxMicros=micros();
-          Serial.println("Master: received! ");
-          message=radio.receiveMessage();
-          radio.instance->messageCount=message.count;
-          //get capture time if slave replies with TCP phase
-          //this is master->slave-> master 
-          if(strcmp(message.messageType,"TCP")==0){
-            message.masterCaptureTime=0;
-            
-            //Reply TCP pkt with TCP pkt
-            stage=Stage::TCP;
-          }
-          else if(strcmp(message.messageType,"DATA")==0){
-            message.masterCaptureTime=radio.instance->totalCapturetime;
+            message.masterCaptureTime=radio.instance->captureTime;
             Serial.print(" Time: ");
-            Serial.println(message.slaveCaptureTime-message.masterCaptureTime);
+            Serial.print(message.slaveCaptureTime);
+            Serial.print(" - ");
+            Serial.print(message.masterCaptureTime);
+            Serial.print(" Time: ");
+            
+            Serial.println(-message.slaveCaptureTime+message.masterCaptureTime);
+
+
+            radio.handleProtocol(message);
+            return;
           }
-          radio.handleProtocol(message);
+          
 
       }
     }
