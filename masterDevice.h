@@ -25,6 +25,10 @@ public:
           // Serial.println("Master: Sent! ");
           // radio.instance->messageCount++;
           radio.timeOut();//start timeout counter
+
+          if(stage==Stage::DATA){
+            radio.instance->totalCapturetime=totalCaptureTime;
+          }
         }
 
         if (tx_fail) {
@@ -49,21 +53,21 @@ public:
             return;
           }
           else if(strcmp(message.messageType,"DATA")==0){
+            message.masterCaptureTime=radio.totalCapturetime;
+
             Serial.print("Capture Time: ");
             Serial.println(radio.instance->captureTime);
-            Serial.print("Capture TimeOVF: ");
-            Serial.println(radio.instance->captureTimeOVF);
-            radio.instance->totalCapturetime = (((unsigned long) radio.instance->captureTimeOVF) << 16 ) + radio.instance->captureTime;
+            Serial.print("Capture Time global: ");
+            Serial.println(totalCaptureTime);
             Serial.print("Total capture Time: ");
-            Serial.println(radio.instance->totalCapturetime);
-            message.masterCaptureTime=radio.instance->captureTime;
+            Serial.println(radio.totalCapturetime);
             Serial.print(" Time: ");
             Serial.print(message.slaveCaptureTime);
             Serial.print(" - ");
             Serial.print(message.masterCaptureTime);
             Serial.print(" Time: ");
             
-            Serial.println(-message.slaveCaptureTime+message.masterCaptureTime);
+            Serial.println(int(message.slaveCaptureTime)-int(message.masterCaptureTime));
 
 
             radio.handleProtocol(message);

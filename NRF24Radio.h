@@ -5,6 +5,15 @@
 #include <RF24.h>
 #include <printf.h>
 
+volatile bool armed=false;
+volatile bool finished=true; //read only outside ISR!!!!
+volatile unsigned int overFlowCount; //read only outside ISR!!!!
+volatile unsigned int startOverFlowCount; //read only outside ISR!!!!
+volatile unsigned int captureTime1; //read only outside ISR!!!!
+volatile unsigned int captureTime2; //read only outside ISR!!!!
+volatile unsigned long totalCaptureTime;
+
+
 class NRF24Radio {
 public:
     RF24 radio;
@@ -20,6 +29,7 @@ public:
     volatile unsigned int captureTime = 0;
     volatile unsigned int captureTimeOVF = 0;
     unsigned long totalCapturetime;
+
 
     //timeout flag
     volatile bool timeOutFlag;
@@ -71,7 +81,8 @@ public:
       Message dataReceived;
       if(radio.available()){
         radio.read(&dataReceived, sizeof(dataReceived));
-
+        
+        delay(100);
         Serial.print(F("{Message Type: "));
         Serial.print(dataReceived.messageType);
         Serial.print(F(", Count: "));
@@ -152,7 +163,11 @@ public:
           snprintf(message.messageType, sizeof(message.messageType), "DATA");
           instance->sendMessage(message);
           //After sending DATA pkt, reset capture flag to prepare for fresh capture time
-          instance->firstCaptureDone=false;
+          Serial.println("Arming!");
+          Serial.println(overFlowCount);
+          Serial.println(captureTime1);
+          Serial.println(captureTime2);
+          armed=true;
           stage = Stage::TCP;
           break;
         case Stage::RESET:
@@ -188,55 +203,38 @@ public:
       }
     }
 
-}
+}};
 
-    static void timerInputCaptureISR() {
-        if (instance) {
-            static unsigned int startOverflowCount = 0;
-
-            if (!instance->firstCaptureDone) {
-              Serial.print("*&*&* at ");
-              Serial.print(stage==Stage::TCP?"tcp ":"data");
-              Serial.println("Stage");
-                instance->startCaptureTime = ICR1;         // Capture start time
-                startOverflowCount = instance->overflowCount; // Record overflow count
-                instance->firstCaptureDone = true;
-                return;
-            } 
-            if (!instance->secondCaptureDone) {
-                instance->endCaptureTime = ICR1; // Capture end time
-                instance->secondCaptureDone=true;
-
-                // Calculate total elapsed time
-                instance->captureTime = instance->endCaptureTime - instance->startCaptureTime;
-                instance->captureTimeOVF = instance->overflowCount - startOverflowCount ;
-                
-
-                // instance->firstCaptureDone = false; // Reset for the next measurement
-                Serial.print("Capture Time: ");
-                Serial.print(stage==Stage::TCP?"*&*& tcp ":"*&*& data ");
-                Serial.println(instance->captureTime);
-                return;
+   // ISR for Timer1 Input Capture
+   ISR(TIMER1_CAPT_vect) {
+        if (!armed && !finished)
+            {
+              captureTime2 = ICR1;
+              startOverFlowCount = overFlowCount - startOverFlowCount;
+              finished=true;
+              totalCaptureTime =((unsigned long)startOverFlowCount)<<16;
+              totalCaptureTime += captureTime2 - captureTime1;
             }
+       
+        if (armed)
+            {
+              captureTime1 = ICR1;
+              startOverFlowCount = overFlowCount;
+              armed=false;
+              finished=false;
+            }
+       
+ 
         }
-    }
-};
 
+    
 // Define the static instance pointer
 NRF24Radio* NRF24Radio::instance = nullptr;
 
-// ISR for Timer1 Input Capture
-ISR(TIMER1_CAPT_vect) {
-    if (NRF24Radio::instance) {
-        NRF24Radio::timerInputCaptureISR();
-    }
-}
-
 // ISR for Timer1 Overflow (optional, if needed)
 ISR(TIMER1_OVF_vect) {
-    if (NRF24Radio::instance) {
-        NRF24Radio::instance->overflowCount++;
-    }
+    overFlowCount++;
+    
 }
 
 #endif // NRF24RADIO_H

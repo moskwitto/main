@@ -23,11 +23,6 @@ public:
           // Serial.println("Slave: Sent! ");
           radio.instance->messageCount++;
           radio.instance->timeOut();
-          if(stage==Stage::DATA){
-            //prepare to store capture time after sending TCP package
-            radio.instance->secondCaptureDone=false;
-          
-          }
           radio.startListening();
         }
 
@@ -46,15 +41,16 @@ public:
           //get capture time if slave replies with TCP phase
           //this is master->slave-> master 
           if(strcmp(message.messageType,"DATA")==0){
-            message.slaveCaptureTime=radio.instance->captureTime;
+            message.slaveCaptureTime=radio.instance->totalCapturetime;
+
+            delay(100);
+            
             Serial.print("Capture Time: ");
             Serial.println(radio.instance->captureTime);
             Serial.print("Capture TimeOVF: ");
             Serial.println(radio.instance->captureTimeOVF);
-            radio.instance->totalCapturetime = (((unsigned long) radio.instance->captureTimeOVF) << 16 ) + radio.instance->captureTime;
-            Serial.print("Total capture Time: ");
-            Serial.println(radio.instance->totalCapturetime);
-            message.slaveCaptureTime=radio.captureTime;
+            Serial.print("Total capture Time Global ");
+            Serial.println(totalCaptureTime);
             Serial.print("Time: ");
             Serial.println(message.slaveCaptureTime-message.masterCaptureTime);
             radio.handleProtocol(message);
@@ -68,6 +64,10 @@ public:
           }
           
           //TCP stage proceeds
+          radio.instance->totalCapturetime=totalCaptureTime;
+
+          Serial.print("After TCP: ");
+          Serial.println(totalCaptureTime);
           radio.handleProtocol(message);
           
         }

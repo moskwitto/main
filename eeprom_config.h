@@ -6,4 +6,4 @@
 
 //for now, roles are defined here
 // Set this to true for the master, commented for the slave
-#define IS_MASTER true
+// #define IS_MASTER true
